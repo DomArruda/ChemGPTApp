@@ -14,4 +14,6 @@ ipython_genutils>=0.2.0   # stmol imports this on some versions; harmless to kee
 torch>=2.2
 transformers>=4.40
 selfies>=2.1.1
+torchvision==0.27.1 # FIXED
+
 # (transformers pulls in tokenizers, safetensors, and huggingface-hub itself.)
