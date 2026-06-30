@@ -1,0 +1,17 @@
+# ---- Core app (always required) -------------------------------------------
+streamlit>=1.40
+duckdb>=1.1
+pandas>=2.0            # needed for duckdb .df()
+rdkit>=2024.3.1        # the modern pip package is "rdkit" (NOT the old "rdkit-pypi")
+py3Dmol>=2.1.0
+stmol>=0.0.9
+ipython_genutils>=0.2.0   # stmol imports this on some versions; harmless to keep
+
+# ---- Optional: ChemGPT generation -----------------------------------------
+# Only needed for the "Generate" feature. Skip these and the app still runs as
+# an analyzer/3D viewer (the Generate button auto-disables if they're absent).
+# torch is the CPU build by default; the 4.7M/19M models run fine on CPU.
+torch>=2.2
+transformers>=4.40
+selfies>=2.1.1
+# (transformers pulls in tokenizers, safetensors, and huggingface-hub itself.)
