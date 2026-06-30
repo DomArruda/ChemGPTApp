@@ -350,7 +350,7 @@ with st.container(border=True):
 
     g1, g2, g3, g4 = st.columns([2, 1, 1, 1])
     model_name = g1.selectbox("ChemGPT model)",
-                              ["ncfrey/ChemGPT-19M", "ncfrey/ChemGPT-4.7M","ncfrey/ChemGPT-1.2B ])
+                              ["ncfrey/ChemGPT-19M", "ncfrey/ChemGPT-4.7M","ncfrey/ChemGPT-1.2B" ])
     n_cands = g2.slider("Candidates", 4, 100, 50)
     temp = g3.slider("Temperature", 0.5, 1.5, 1.0, 0.1)
     max_tok = g4.slider("Max tokens", 16, 128, 64, 8)
