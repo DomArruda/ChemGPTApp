@@ -33,7 +33,7 @@ import pandas as pd
 import py3Dmol
 from stmol import showmol
 import streamlit as st
-from rdkit import Chem
+from rdkit import Chem, RDLogger
 from rdkit.Chem import Descriptors, Crippen, rdMolDescriptors, AllChem
 
 st.set_page_config(
@@ -44,6 +44,22 @@ st.set_page_config(
 )
 
 db_conn = init_duckdb()
+
+
+def get_last_valid_sub_smiles(smiles: str):
+    RDLogger.DisableLog('rdApp.*')
+    
+    # Check full string first
+    if Chem.MolFromSmiles(smiles): 
+        return smiles # Return the STRING, not the Mol
+
+    # Work backwards to find the longest valid prefix
+    for idx in range(len(smiles) - 1, 0, -1):
+        sub_smiles = smiles[:idx]
+        if Chem.MolFromSmiles(sub_smiles): 
+            return sub_smiles # Return the STRING
+            
+    return None
 
 SAMPLE_PRESETS = {
     "Caffeine (everyday molecule)": {
@@ -179,6 +195,7 @@ with st.sidebar:
         - Descriptors and 3D coordinates are computed **locally** (RDKit) — they never leave your machine.
         - ChemGPT generation downloads the model weights once from Hugging Face, then runs locally on CPU.
         - Results are cached in an in-memory DuckDB database, wiped when the app stops.
+        - **Note: PubChem receives requests to get the nomenclature of generated and pasted molecules.**
         """)
 
 # --- RDKit guard -------------------------------------------------------------
@@ -202,7 +219,31 @@ with st.expander("How to use this & what the numbers mean"):
     """)
 
 # --- Molecule input ----------------------------------------------------------
-st.subheader("Molecule")
+def handle_analyze_click(): # we need this callback just in case input is invalid...
+    # Grab the string directly from session state
+    smiles_base = str(st.session_state['smiles_input']).strip() 
+    saved_smiles = get_last_valid_sub_smiles(smiles_base)
+    
+    if saved_smiles is None:
+        st.error("Could not find any valid SMILES structure in your input.")
+    else:
+        # Save the valid string to active state
+        st.session_state["active"] = {
+            "smiles": saved_smiles,
+            "target": st.session_state.get("target_input", ""),
+            "source": "pasted",
+        }
+        
+        # If we had to truncate it, warn the user AND update the input box
+        if saved_smiles != smiles_base:
+            st.warning(f"Invalid SMILES string - truncated to last valid part of SMILES STRING {saved_smiles}.")
+            st.warning("NOTE: Chemical Properties May Significantly Differ")
+            # This is now safe because the callback runs before the widget renders!
+            st.session_state["smiles_input"] = saved_smiles
+        else:
+            st.toast("Successfully Validated SMILES String! See below for analysis.")
+
+# 2. Draw the UI
 in_col, btn_col = st.columns([4, 1])
 with in_col:
     st.text_input("Molecule — SMILES string", key="smiles_input",
@@ -212,13 +253,11 @@ with in_col:
 with btn_col:
     st.write("")
     st.write("")
-    if st.button("Analyze this molecule (no generation)", type="primary", width="stretch"):
-        st.session_state["active"] = {
-            "smiles": st.session_state["smiles_input"],
-            "target": st.session_state["target_input"],
-            "source": "pasted",
-        }
-
+    # 3. Attach the callback using on_click (remove the if statement)
+    st.button("Analyze this molecule (no generation)", 
+              type="primary", 
+              use_container_width=True, 
+              on_click=handle_analyze_click)
 # --- Generation (ChemGPT) ----------------------------------------------------
 with st.container(border=True):
     st.markdown("**✨ Generate new candidates with ChemGPT** (optional)")
@@ -301,7 +340,7 @@ log_df['nomenlature'] = nomenclature_names
 log_df['target_context'] = np.where(log_df['source'] == "generated", "GENERATED: " + log_df['target_context'], log_df['target_context'])
 
 
-log_df.rename(columns={
+log_df = log_df.rename(columns={
     "smiles": "SMILES", "nomenclature":"Nomenclature", "source": "Source", "target_context": "Context",
     "mw": "MW", "logp": "LogP", "hbd": "H-Donors", "hba": "H-Acceptors",
     "tpsa": "TPSA", "lipinski_violations": "Lipinski Violations",
