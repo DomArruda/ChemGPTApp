@@ -2,9 +2,11 @@
 # Requires:            streamlit duckdb rdkit py3Dmol stmol
 # Optional (ChemGPT):  torch transformers selfies
 #   pip install streamlit duckdb rdkit py3Dmol stmol torch transformers selfies
+# Split each "# file.py" block into its own module later.
 
 
 import importlib
+import uuid
 import numpy as np
 from models import (
     init_duckdb,
@@ -37,7 +39,7 @@ from rdkit.Chem import Descriptors, Crippen, rdMolDescriptors, AllChem
 
 st.set_page_config(
     page_title="ChemGPT Studio",
-    page_icon="🧪",
+    page_icon="assets/favicon.png" if False else None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -71,6 +73,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 db_conn = init_duckdb()
+
+# Per-session identity so the shared (process-global) DuckDB connection never
+# leaks one user's molecules into another session's cache or analysis log.
+if "session_id" not in st.session_state:
+    st.session_state["session_id"] = str(uuid.uuid4())
 
 
 def get_last_valid_sub_smiles(smiles: str):
@@ -156,26 +163,32 @@ def render_results(smiles, target, source):
         st.error("That SMILES string could not be parsed. Check the notation and try again.")
         return
 
+    sid = st.session_state["session_id"]
     canonical = parsed["canonical"]
     target_context = (target or "").strip()[:60] or "—"
-    cache_id = make_cache_key(canonical, target_context)
+    cache_id = make_cache_key(canonical, target_context, sid)
     row = db_conn.execute(
-        "SELECT * FROM molecule_stage WHERE cache_hash = ?", (cache_id,)
+        """
+        SELECT mw, logp, hbd, hba, tpsa, rot_bonds, rings, heavy_atoms, lipinski_violations
+        FROM molecule_stage
+        WHERE cache_hash = ? AND session_id = ?
+        """,
+        (cache_id, sid),
     ).fetchone()
 
     if row:
         desc = {
-            "mw": row[4], "logp": row[5], "hbd": row[6], "hba": row[7],
-            "tpsa": row[8], "rot_bonds": row[9], "rings": row[10],
-            "heavy_atoms": row[11], "lipinski_violations": row[12],
+            "mw": row[0], "logp": row[1], "hbd": row[2], "hba": row[3],
+            "tpsa": row[4], "rot_bonds": row[5], "rings": row[6],
+            "heavy_atoms": row[7], "lipinski_violations": row[8],
         }
         note = "loaded from cache"
     else:
         desc = parsed
         db_conn.execute(
-            "INSERT OR REPLACE INTO molecule_stage VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT OR REPLACE INTO molecule_stage VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
-                cache_id, canonical, target_context, source,
+                cache_id, sid, canonical, target_context, source,
                 desc["mw"], desc["logp"], desc["hbd"], desc["hba"],
                 desc["tpsa"], desc["rot_bonds"], desc["rings"],
                 desc["heavy_atoms"], desc["lipinski_violations"],
@@ -268,7 +281,12 @@ st.caption("Educational demo · descriptors via RDKit, generation via ChemGPT ·
 
 # --- Session snapshot ----------------------------------------------------------
 _stats = db_conn.execute(
-    "SELECT COUNT(*), SUM(CASE WHEN source = 'generated' THEN 1 ELSE 0 END) FROM molecule_stage"
+    """
+    SELECT COUNT(*), SUM(CASE WHEN source = 'generated' THEN 1 ELSE 0 END)
+    FROM molecule_stage
+    WHERE session_id = ?
+    """,
+    (st.session_state["session_id"],),
 ).fetchone()
 _total_logged, _generated_logged = (_stats[0] or 0), (_stats[1] or 0)
 
@@ -387,7 +405,7 @@ with generate_tab:
         g1, g2, g3, g4 = st.columns(4)
         model_name = g1.selectbox("ChemGPT model",
                                   ["ncfrey/ChemGPT-19M", "ncfrey/ChemGPT-4.7M"])
-        n_cands = g2.slider("Candidates", 4, 500, 50)
+        n_cands = g2.slider("Candidates", 4, 100, 50)
         temp = g3.slider("Temperature", 0.5, 1.5, 1.0, 0.1)
         max_tok = g4.slider("Max tokens", 16, 128, 64, 8)
 
@@ -463,7 +481,9 @@ log_df = db_conn.execute(
     """
     SELECT smiles, source, target_context, mw, logp, hbd, hba, tpsa, lipinski_violations
     FROM molecule_stage
-    """
+    WHERE session_id = ?
+    """,
+    (st.session_state["session_id"],),
 ).df()
 
 if not log_df.empty:
