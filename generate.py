@@ -5,6 +5,7 @@ import importlib
 import streamlit as st
 from rdkit import Chem
 from rdkit.Chem import Descriptors, Crippen, rdMolDescriptors, AllChem
+import pubchempy
 def GEN_AVAILABLE():
     return all(importlib.util.find_spec(m) is not None for m in ("torch", "transformers", "selfies"))
 
