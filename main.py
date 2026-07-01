@@ -2,7 +2,6 @@
 # Requires:            streamlit duckdb rdkit py3Dmol stmol
 # Optional (ChemGPT):  torch transformers selfies
 #   pip install streamlit duckdb rdkit py3Dmol stmol torch transformers selfies
-# Split each "# file.py" block into its own module later.
 
 
 import importlib
@@ -39,7 +38,7 @@ from rdkit.Chem import Descriptors, Crippen, rdMolDescriptors, AllChem
 
 st.set_page_config(
     page_title="ChemGPT Studio",
-    page_icon="assets/favicon.png" if False else None,
+    page_icon="\U0001F9EA",  # test tube / chem vial — browser-tab icon only, not in-page
     layout="wide",
     initial_sidebar_state="expanded",
 )
