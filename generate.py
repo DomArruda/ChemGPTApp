@@ -9,6 +9,17 @@ def GEN_AVAILABLE():
     return all(importlib.util.find_spec(m) is not None for m in ("torch", "transformers", "selfies"))
 
 
+def smiles_to_nomenclature(smiles):
+    try:
+        # Search PubChem by SMILES
+        compounds = pcp.get_compounds(smiles, namespace='smiles')
+        if compounds:
+            # Retrieve the IUPAC name
+            return compounds[0].iupac_name
+        return "Molecule not found in PubChem"
+    except Exception as e:
+        return f"Error: {e}"
+
 @st.cache_resource(show_spinner=False)
 def load_chemgpt(model_name: str):
     """Load tokenizer + causal LM once. First call downloads weights from HF."""
