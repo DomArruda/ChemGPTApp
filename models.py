@@ -7,7 +7,8 @@ import streamlit as st
 
 @st.cache_resource
 def init_duckdb():
-    """Shared in-memory DuckDB stage.
+    """Shared in-memory DuckDB stage. NOTE: @st.cache_resource makes this
+    connection process-global and shared across every session, hence the session id..."""
     conn = duckdb.connect(database=":memory:", read_only=False)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS molecule_stage (
